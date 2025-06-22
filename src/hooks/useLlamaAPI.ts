@@ -17,8 +17,8 @@ export const useLlamaAPI = () => {
 
   // Конфигурация по умолчанию для локальной Llama
   const defaultConfig: LlamaAPIConfig = {
-    endpoint: 'http://localhost:11434/api/generate', // Ollama по умолчанию
-    model: 'llama3' // или другая модель
+    endpoint: 'http://localhost:11434/api/generate',
+    model: 'llama3'
   };
 
   const generateResponse = async (
@@ -32,13 +32,18 @@ export const useLlamaAPI = () => {
     const apiConfig = { ...defaultConfig, ...config };
 
     try {
-      // Формируем промпт с контекстом для госслужбы
       const systemPrompt = `Ты - АстанаГид, цифровой помощник для государственных служащих города Астаны. 
       Отвечай на вопросы по административным процедурам, документообороту, этическим нормам и регламентам.
       Будь профессиональным, но дружелюбным. Отвечай на том же языке, на котором задан вопрос.
       ${context ? `Контекст категории: ${context}` : ''}`;
 
       const fullPrompt = `${systemPrompt}\n\nВопрос пользователя: ${prompt}`;
+
+      console.log('Отправляем запрос к Llama:', {
+        endpoint: apiConfig.endpoint,
+        model: apiConfig.model,
+        promptLength: fullPrompt.length
+      });
 
       const response = await fetch(apiConfig.endpoint, {
         method: 'POST',
@@ -58,24 +63,30 @@ export const useLlamaAPI = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('Получен ответ от Llama:', data);
       
       return {
         content: data.response || 'Извините, не удалось получить ответ.'
       };
 
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
-      console.error('Ошибка Llama API:', errorMessage);
+    } catch (err: any) {
+      let errorMessage = 'Неизвестная ошибка';
       
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        errorMessage = 'CORS ошибка - проблема доступа к localhost';
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      
+      console.error('Ошибка Llama API:', errorMessage);
       setError(errorMessage);
       
-      // Возвращаем fallback ответ
       return {
-        content: 'Извините, сервис временно недоступен. Попробуйте позже.',
+        content: 'Извините, сервис ИИ временно недоступен. Используется резервная база знаний.',
         error: errorMessage
       };
     } finally {
