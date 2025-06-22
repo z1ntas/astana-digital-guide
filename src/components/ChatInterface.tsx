@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, ThumbsUp, ThumbsDown, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,21 +16,69 @@ interface Message {
 
 interface ChatInterfaceProps {
   onCategorySelect: (category: string) => void;
+  selectedCategory?: string;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect, selectedCategory }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { t, language } = useLanguage();
 
-  const quickActions = [
-    { key: 'vacation', text: t('quickActions.vacation') },
-    { key: 'businessTrip', text: t('quickActions.businessTrip') },
-    { key: 'documents', text: t('quickActions.documents') },
-    { key: 'ethics', text: t('quickActions.ethics') },
-  ];
+  const getQuickActionsForCategory = (category?: string) => {
+    if (!category) {
+      return [
+        { key: 'vacation', text: t('quickActions.vacation') },
+        { key: 'businessTrip', text: t('quickActions.businessTrip') },
+        { key: 'documents', text: t('quickActions.documents') },
+        { key: 'ethics', text: t('quickActions.ethics') },
+      ];
+    }
+
+    const categoryActions: Record<string, Array<{ key: string; text: string }>> = {
+      documents: [
+        { key: 'serviceNote', text: language === 'ru' ? 'Как оформить служебную записку?' : 'Қызметтік жазбаны қалай ресімдеу керек?' },
+        { key: 'docRegistration', text: language === 'ru' ? 'Регистрация входящих документов' : 'Кіріс құжаттарды тіркеу' },
+        { key: 'docApproval', text: language === 'ru' ? 'Порядок согласования документов' : 'Құжаттарды келісу тәртібі' },
+        { key: 'docRequirements', text: language === 'ru' ? 'Требования к оформлению документов' : 'Құжаттарды ресімдеу талаптары' }
+      ],
+      hr: [
+        { key: 'vacation', text: t('quickActions.vacation') },
+        { key: 'sickLeave', text: language === 'ru' ? 'Как оформить больничный лист?' : 'Ауыру парақшасын қалай ресімдеу керек?' },
+        { key: 'hrProcedures', text: language === 'ru' ? 'Кадровые процедуры' : 'Кадр рәсімдері' },
+        { key: 'workSchedule', text: language === 'ru' ? 'Режим работы и график' : 'Жұмыс режимі мен кестесі' }
+      ],
+      ethics: [
+        { key: 'ethics', text: t('quickActions.ethics') },
+        { key: 'citizenWork', text: language === 'ru' ? 'Работа с гражданами' : 'Азаматтармен жұмыс' },
+        { key: 'conflictInterest', text: language === 'ru' ? 'Конфликт интересов' : 'Мүдделер қақтығысы' },
+        { key: 'ethicalNorms', text: language === 'ru' ? 'Этические требования' : 'Этикалық талаптар' }
+      ],
+      approvals: [
+        { key: 'approvalProcess', text: language === 'ru' ? 'Процедура согласования' : 'Келісу рәсімі' },
+        { key: 'docProject', text: language === 'ru' ? 'Согласование проекта документа' : 'Құжат жобасын келісу' },
+        { key: 'signatures', text: language === 'ru' ? 'Виды подписей и виз' : 'Қол қою және виза түрлері' },
+        { key: 'approvalTerms', text: language === 'ru' ? 'Сроки согласования' : 'Келісу мерзімдері' }
+      ],
+      citizens: [
+        { key: 'citizenAppeals', text: language === 'ru' ? 'Обращения граждан' : 'Азаматтардың өтініштері' },
+        { key: 'appealTerms', text: language === 'ru' ? 'Сроки рассмотрения обращений' : 'Өтініштерді қарау мерзімдері' },
+        { key: 'complaints', text: language === 'ru' ? 'Работа с жалобами' : 'Шағымдармен жұмыс' },
+        { key: 'citizenRights', text: language === 'ru' ? 'Права граждан' : 'Азаматтардың құқықтары' }
+      ],
+      trips: [
+        { key: 'businessTrip', text: t('quickActions.businessTrip') },
+        { key: 'tripDocuments', text: language === 'ru' ? 'Документы для командировки' : 'Іссапарға арналған құжаттар' },
+        { key: 'tripExpenses', text: language === 'ru' ? 'Командировочные расходы' : 'Іссапар шығыстары' },
+        { key: 'tripReport', text: language === 'ru' ? 'Отчет по командировке' : 'Іссапар бойынша есеп' }
+      ]
+    };
+
+    return categoryActions[category] || [];
+  };
+
+  const quickActions = getQuickActionsForCategory(selectedCategory);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -134,7 +181,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect }) => {
                 ? 'bg-white border-gray-200' 
                 : 'bg-blue-600 text-white border-blue-600'
             }`}>
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-line">{message.text}</p>
               
               {message.isBot && (
                 <div className="flex items-center space-x-2 mt-2">
@@ -192,9 +239,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect }) => {
       </div>
 
       {/* Быстрые действия */}
-      {messages.length <= 1 && (
+      {(messages.length <= 1 || selectedCategory) && quickActions.length > 0 && (
         <div className="p-4 bg-white border-t">
-          <p className="text-sm text-gray-600 mb-3">{t('chat.quickActionsTitle')}</p>
+          <p className="text-sm text-gray-600 mb-3">
+            {selectedCategory 
+              ? `${t('chat.quickActionsTitle')} ${t(`categories.${selectedCategory}.name`)}`
+              : t('chat.quickActionsTitle')
+            }
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {quickActions.map((action) => (
               <Button

@@ -46,7 +46,10 @@ const Index = () => {
           
           {/* Основной контент */}
           <div className="flex-1 flex flex-col min-w-0">
-            <ChatInterface onCategorySelect={handleCategorySelect} />
+            <ChatInterface 
+              onCategorySelect={handleCategorySelect} 
+              selectedCategory={selectedCategory}
+            />
           </div>
         </div>
       </div>
