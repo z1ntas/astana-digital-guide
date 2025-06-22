@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, ThumbsUp, ThumbsDown, Download } from 'lucide-react';
+import { Send, Bot, User, ThumbsUp, ThumbsDown, Download, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { useLanguage } from '../hooks/useLanguage';
+import { useLlamaAPI } from '../hooks/useLlamaAPI';
 import { searchKnowledgeBase } from '../utils/knowledgeBase';
+import LlamaSettings from './LlamaSettings';
 
 interface Message {
   id: string;
@@ -23,8 +25,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect, selecte
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [useAI, setUseAI] = useState(false);
+  const [apiEndpoint, setApiEndpoint] = useState('http://localhost:11434/api/generate');
+  const [apiModel, setApiModel] = useState('llama3');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { t, language } = useLanguage();
+  const { generateResponse, isLoading: aiIsLoading, error: aiError } = useLlamaAPI();
 
   const getQuickActionsForCategory = (category?: string) => {
     if (!category) {
@@ -99,6 +106,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect, selecte
     setMessages([welcomeMessage]);
   }, [language, t]);
 
+  useEffect(() => {
+    // Проверяем, есть ли сохраненные настройки API
+    const savedEndpoint = localStorage.getItem('llama_endpoint');
+    const savedModel = localStorage.getItem('llama_model');
+    const savedUseAI = localStorage.getItem('use_ai') === 'true';
+    
+    if (savedEndpoint) setApiEndpoint(savedEndpoint);
+    if (savedModel) setApiModel(savedModel);
+    setUseAI(savedUseAI);
+  }, []);
+
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
 
@@ -113,19 +131,69 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect, selecte
     setInputValue('');
     setIsTyping(true);
 
-    // Имитация задержки обработки
-    setTimeout(() => {
-      const response = searchKnowledgeBase(text, language);
-      const botMessage: Message = {
+    try {
+      let responseText: string;
+
+      if (useAI) {
+        // Используем Llama API
+        const categoryContext = selectedCategory ? t(`categories.${selectedCategory}.name`) : '';
+        const aiResponse = await generateResponse(text, categoryContext, {
+          endpoint: apiEndpoint,
+          model: apiModel
+        });
+        responseText = aiResponse.content;
+        
+        if (aiResponse.error) {
+          console.error('AI Error:', aiResponse.error);
+          // Fallback к базе знаний при ошибке AI
+          responseText = searchKnowledgeBase(text, language);
+        }
+      } else {
+        // Используем базу знаний
+        responseText = searchKnowledgeBase(text, language);
+      }
+
+      // Имитация задержки для лучшего UX
+      setTimeout(() => {
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: responseText,
+          isBot: true,
+          timestamp: new Date(),
+        };
+
+        setMessages(prev => [...prev, botMessage]);
+        setIsTyping(false);
+      }, useAI ? 500 : 1500);
+
+    } catch (error) {
+      console.error('Error getting response:', error);
+      
+      const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: response,
+        text: language === 'ru' 
+          ? 'Извините, произошла ошибка. Попробуйте еще раз.' 
+          : 'Кешіріңіз, қате орын алды. Қайталап көріңіз.',
         isBot: true,
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, botMessage]);
+      setMessages(prev => [...prev, errorMessage]);
       setIsTyping(false);
-    }, 1500);
+    }
+  };
+
+  const handleSettingsChange = (endpoint: string, model: string) => {
+    setApiEndpoint(endpoint);
+    setApiModel(model);
+    setUseAI(true);
+    localStorage.setItem('use_ai', 'true');
+  };
+
+  const toggleAIMode = () => {
+    const newUseAI = !useAI;
+    setUseAI(newUseAI);
+    localStorage.setItem('use_ai', newUseAI.toString());
   };
 
   const handleQuickAction = (actionKey: string) => {
@@ -155,10 +223,37 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect, selecte
     <div className="flex flex-col h-full">
       {/* Заголовок чата */}
       <div className="flex justify-between items-center p-4 border-b bg-white">
-        <h2 className="text-xl font-semibold text-gray-800">{t('chat.title')}</h2>
-        <Button variant="outline" size="sm" onClick={clearChat}>
-          {t('chat.clear')}
-        </Button>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-800">{t('chat.title')}</h2>
+          <div className="flex items-center mt-1 space-x-2">
+            <span className={`text-xs px-2 py-1 rounded ${useAI ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              {useAI ? 'Llama AI' : 'База знаний'}
+            </span>
+            {aiError && (
+              <span className="text-xs text-red-600">Ошибка AI</span>
+            )}
+          </div>
+        </div>
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleAIMode}
+            className={useAI ? 'bg-green-50 border-green-200' : ''}
+          >
+            {useAI ? 'AI Вкл' : 'AI Выкл'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsSettingsOpen(true)}
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={clearChat}>
+            {t('chat.clear')}
+          </Button>
+        </div>
       </div>
 
       {/* Область сообщений */}
@@ -286,6 +381,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onCategorySelect, selecte
           </Button>
         </div>
       </div>
+
+      <LlamaSettings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSettingsChange={handleSettingsChange}
+      />
     </div>
   );
 };
